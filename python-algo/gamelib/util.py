@@ -1,7 +1,20 @@
 import sys
+import math
+
 
 
 BANNER_TEXT = "---------------- Starting Your Algo --------------------"
+
+# Parameters to tune
+ADV_PERCENT_POINT = 3
+M = ADV_PERCENT_POINT / math.log(1.0001 - 1/30)
+MOBILE_POINTS = 2
+WALL_POINT = 0.5
+TURRET_POINT = 6
+SUPPORT_POINT = 2
+
+VICTORY_REWARD = 250
+
 
 
 def get_command():

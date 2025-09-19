@@ -10,3 +10,9 @@ dist/*
 
 *.zip
 */.idea/*
+buffer/
+*errorFile*
+*.txt
+checkpoints/
+python-algo/gpt_whiteboard_ppo.py
+venv/

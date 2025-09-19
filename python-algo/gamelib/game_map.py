@@ -37,6 +37,9 @@ class GameMap:
         self.BOTTOM_RIGHT = 3
         self.__map = self.__empty_grid()
         self.__start = [13,0]
+
+    def getmap(self):
+        return self.__map
     
     def __getitem__(self, location):
         if len(location) == 2 and self.in_arena_bounds(location):

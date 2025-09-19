@@ -19,30 +19,32 @@
       "getHitRadius":0.01,
       "display":"filter",
       "shorthand":"FF",
-      "startHealth":75.0,
+      "startHealth":60.0,
       "unitCategory": 0,
       "refundPercentage": 0.75,
       "turnsRequiredToRemove": 1,
       "upgrade": {
-        "startHealth": 150.0
+        "startHealth": 120.0
       }
     },
     {
       "icon": "S3_encryptor",
       "iconxScale": 0.5,
       "iconyScale": 0.5,
-      "cost1":7.0,
+      "cost1":4.0,
       "getHitRadius":0.01,
       "display":"encryptor",
-      "shieldRange":0,
+      "shieldRange":3.5,
       "shorthand":"EF",
       "startHealth":30.0,
       "unitCategory": 0,
       "refundPercentage": 0.75,
       "turnsRequiredToRemove": 1,
-      "generatesResource1": 1,
+      "shieldPerUnit": 3,
       "upgrade": {
-        "generatesResource2": 2
+        "shieldRange": 7.0,
+        "shieldPerUnit": 4,
+        "shieldBonusPerY": 0.3
       }
     },
     {
@@ -55,7 +57,7 @@
       "display":"destructor",
       "attackRange":2.5,
       "shorthand":"DF",
-      "startHealth":90.0,
+      "startHealth":75.0,
       "unitCategory": 0,
       "refundPercentage": 0.75,
       "turnsRequiredToRemove": 1,
@@ -90,8 +92,8 @@
       "icon": "S3_emp",
       "iconxScale": 0.47,
       "iconyScale": 0.47,
-      "attackDamageWalker":6.0,
-      "attackDamageTower":6.0,
+      "attackDamageWalker":8.0,
+      "attackDamageTower":8.0,
       "playerBreachDamage":1.0,
       "cost2":3.0,
       "getHitRadius":0.01,
@@ -161,7 +163,7 @@
     "bitRampBitCapGrowthRate":5.0,
     "roundStartBitRamp":10,
     "bitGrowthRate":1.0,
-    "startingHP":40.0,
+    "startingHP":30.0,
     "maxBits":150.0,
     "bitsPerRound":5.0,
     "coresPerRound":5.0,
