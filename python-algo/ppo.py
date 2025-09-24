@@ -57,7 +57,7 @@ for episode in range(max_episodes):
         start = time.time()
         with open("thegame.txt", "w") as file:
             file.write(str(game))
-        run_match("python-algo/ppo_strategy.ps1", "python-algo/starter_strategy.ps1")
+        run_match("python-algo/ppo_strategy.sh", "python-algo/starter_strategy.sh")
 
         ep_obs = []
         ep_actions = []
@@ -196,9 +196,7 @@ for episode in range(max_episodes):
             unit_policy_loss = -torch.min(surr3, surr4).mean()
             value_loss = (return_batch - values.squeeze()).pow(2).mean()
 
-            print(mean_return)
-            factor = -min(0, mean_return + 1) / 1000
-            
+            factor = -min(0, mean_return + 1.25) / 2500
             
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
             unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))

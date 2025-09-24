@@ -52,7 +52,6 @@ def run_match(algo1_path, algo2_path):
     
     run_single_game("cd {} && java -jar engine.jar work {} {}".format(parent_dir, algo1, algo2))
 
-
     filename = glob.glob('replays/*')[0]
     with open(filename, "r") as file:
         a = file.readlines()
