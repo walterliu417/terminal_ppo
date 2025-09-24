@@ -12,7 +12,7 @@ def run_single_game(process_command):
         process_command,
         shell=True,
         stdout=subprocess.DEVNULL,
-        stderr=sys.stdout
+        stderr=subprocess.STDOUT
         )
     # daemon necessary so game shuts down if this script is shut down by user
     p.daemon = 1
@@ -51,7 +51,6 @@ def run_match(algo1_path, algo2_path):
     #print("Algo 2:", algo2)
     
     run_single_game("cd {} && java -jar engine.jar work {} {}".format(parent_dir, algo1, algo2))
-
 
     filename = glob.glob('replays/*')[0]
     with open(filename, "r") as file:

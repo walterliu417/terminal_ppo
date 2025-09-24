@@ -37,10 +37,11 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         self.model = TerminalA2C()
         try:
-            self.model.load_state_dict(torch.load("checkpoints/latest.pth"))
+            self.model.load_state_dict(torch.load("checkpoints/latest.pth", weights_only=True))
         except:
             # New model
             pass
+        self.model.eval()
 
         try:
             open("mefirst.txt", "w").close()
