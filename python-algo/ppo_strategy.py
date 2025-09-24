@@ -108,10 +108,10 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         game_state = gamelib.GameState(self.config, turn_state)
 
-        list_board, list_my_stats, list_their_stats = self.get_current_state_lists(game_state)
+        list_board, list_my_units, list_their_units, list_my_stats, list_their_stats = self.get_current_state_lists(game_state)
         
 
-        st = f"{list_board},{list_my_stats},{list_their_stats}\n"
+        st = f"{list_board},{list_my_units},{list_their_units},{list_my_stats},{list_their_stats}\n"
         if self.save:
             with open("buffer/temp_data.py","a") as file:
                 file.write(st)
@@ -134,6 +134,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         board = game_state.game_map.getmap()
         
         list_board = np.zeros((6, 28, 28))
+        list_my_units = np.zeros((3, 28))
+        list_their_units = np.zeros((3, 28))
 
         for x in range(len(board)):
             for y in range(len(board[0])):
@@ -161,13 +163,28 @@ class AlgoStrategy(gamelib.AlgoCore):
                             list_board[5][x][y] = (item.health / 75) * multiplier
                         else:
                             list_board[4][x][y] = (item.health / 75) * multiplier
-                        
-                        
+
+                    elif item.unit_type == "PI":
+                        if multiplier == 1:
+                            list_my_units[0][x] += 1
+                        elif multiplier == -1:
+                            list_their_units[0][x] += 1
+                    elif item.unit_type == "EI":
+                        if multiplier == 1:
+                            list_my_units[1][x] += 1
+                        elif multiplier == -1:
+                            list_their_units[1][x] += 1
+                    elif item.unit_type == "SI":
+                        if multiplier == 1:
+                            list_my_units[2][x] += 1
+                        elif multiplier == -1:
+                            list_their_units[2][x] += 1
 
         list_my_stats = [game_state.my_health, game_state.get_resources(0)[0], game_state.get_resources(0)[1]]
         list_their_stats = [game_state.enemy_health, game_state.get_resources(1)[0], game_state.get_resources(1)[1]]
         
-        return list_board.tolist(), list_my_stats, list_their_stats
+
+        return list_board.tolist(), list_my_units.tolist(), list_their_units.tolist(), list_my_stats, list_their_stats
     
     def ppo_strategy(self, game_state):
 
@@ -186,8 +203,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
             building_bias_factor = self.building_resource_penalty / 250
             unit_bias_factor = self.unit_resource_penalty / 250
-            with open("fun.txt", "a") as file:
-                file.write(f"{self.building_resource_penalty, building_bias_factor, self.unit_resource_penalty, unit_bias_factor}")
+            
                 
             self.building_resource_penalty = 0
             self.unit_resource_penalty = 0
@@ -196,22 +212,27 @@ class AlgoStrategy(gamelib.AlgoCore):
             state = eval(data[0])
             current_board = torch.tensor(state[0], dtype=torch.float)
             board = torch.row_stack((current_board, torch.zeros((6, 28, 28), dtype=torch.float)))
-            my_stats = torch.tensor(state[1], dtype=torch.float)
+            my_stats = torch.tensor(state[3], dtype=torch.float)
             my_stats_change = torch.tensor(np.zeros(3), dtype=torch.float)
-            their_stats = torch.tensor(state[2], dtype=torch.float)
+            their_stats = torch.tensor(state[4], dtype=torch.float)
             their_stats_change = torch.tensor(np.zeros(3), dtype=torch.float)
+            my_units = torch.zeros((3, 28))
+            their_units = torch.zeros((3, 28))
         else:
             last_board, present_board = eval(data[-2]), eval(data[-1])
             current_board = torch.tensor(present_board[0], dtype=torch.float)
             board = torch.row_stack((torch.tensor(present_board[0], dtype=torch.float), torch.tensor(np.array(present_board[0]) - np.array(last_board[0]), dtype=torch.float)))
-            my_stats = torch.tensor(present_board[1], dtype=torch.float)
-            my_stats_change = torch.tensor(np.array(present_board[1]) - np.array(last_board[1]), dtype=torch.float)
-            their_stats = torch.tensor(present_board[2], dtype=torch.float)
-            their_stats_change = torch.tensor(np.array(present_board[2]) - np.array(last_board[2]), dtype=torch.float)
+            my_stats = torch.tensor(present_board[3], dtype=torch.float)
+            my_stats_change = torch.tensor(np.array(present_board[3]) - np.array(last_board[3]), dtype=torch.float)
+            their_stats = torch.tensor(present_board[4], dtype=torch.float)
+            their_stats_change = torch.tensor(np.array(present_board[4]) - np.array(last_board[4]), dtype=torch.float)
+            my_units = torch.tensor(last_board[1], dtype=torch.float)
+            their_units = torch.tensor(last_board[2], dtype=torch.float)
+            
 
         # Forward pass through the model (policy + value function)
-        building_probs, unit_probs, value = self.model.forward(my_stats, my_stats_change, their_stats, their_stats_change, board)
-        episode_obs = [my_stats.tolist(), my_stats_change.tolist(), their_stats.tolist(), their_stats_change.tolist(), board.tolist()]
+        building_probs, unit_probs, value = self.model.forward(my_units, their_units, my_stats, my_stats_change, their_stats, their_stats_change, board)
+        episode_obs = [my_units.tolist(), their_units.tolist(), my_stats.tolist(), my_stats_change.tolist(), their_stats.tolist(), their_stats_change.tolist(), board.tolist()]
         
         # Sample action from the probability distribution
 
@@ -362,9 +383,9 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def calc_reward(self, flbp, lap, lbp):
         further_last_build_phase, last_action_phase, last_build_phase = flbp, lap, lbp
-        _, further_last_my_stats, further_last_their_stats = eval(further_last_build_phase)
-        last_buildings, last_my_stats, last_their_stats = eval(last_action_phase)
-        buildings, my_stats, their_stats = eval(last_build_phase)
+        _, _, _, further_last_my_stats, further_last_their_stats = eval(further_last_build_phase)
+        last_buildings, _, _, last_my_stats, last_their_stats = eval(last_action_phase)
+        buildings, _, _, my_stats, their_stats = eval(last_build_phase)
         advantage = 0
 
         # Calculate advantage from scoring/being scored
@@ -530,9 +551,9 @@ class AlgoStrategy(gamelib.AlgoCore):
                 file.write("first turn done")
             
             game_state = gamelib.GameState(self.config, turn_string)
-            list_board, list_my_stats, list_their_stats = self.get_current_state_lists(game_state)
+            list_board, list_my_units, list_their_units, list_my_stats, list_their_stats = self.get_current_state_lists(game_state)
             
-            st = f"{list_board},{list_my_stats},{list_their_stats}\n"
+            st = f"{list_board},{list_my_units},{list_their_units},{list_my_stats},{list_their_stats}\n"
             with open("buffer/temp_data.py","a") as file:
                 file.write(st)
                 

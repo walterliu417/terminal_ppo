@@ -19,16 +19,16 @@ lr = 3e-4  # Learning rate
 ppo_epochs = 10  # Number of updates per episode
 mini_batch_size = 64  # Size of mini-batch for updating
 max_episodes = 1000  # Total number of episodes
-num_games = 15
+num_games = 1
 
-new_model = True
+new_model = False
 
 
 # Model and optimizer
 model = TerminalA2C()
 if not new_model:
     try:
-        model.load_state_dict(torch.load("checkpoints/latest.pth"))
+        model.load_state_dict(torch.load("checkpoints/latest.pth", weights_only=True))
     except Exception as e:
         print(e)
         print("Using new models.")
@@ -101,6 +101,8 @@ for episode in range(max_episodes):
     # Time to update PPO
 
     # Flatten the buffer
+    all_mu_obs = []
+    all_tu_obs = []
     all_ms_obs = []
     all_msc_obs = []
     all_ts_obs = []
@@ -117,11 +119,13 @@ for episode in range(max_episodes):
         # TODO: need extra loop and sum for each game!
         returns, advantages = compute_gae(ep['rewards'], ep['values'], ep['dones'])
         for frame in range(len(ep["obs"])):
-            all_ms_obs.append(torch.tensor(ep['obs'][frame][0]))
-            all_msc_obs.append(torch.tensor(ep['obs'][frame][1]))
-            all_ts_obs.append(torch.tensor(ep['obs'][frame][2]))
-            all_tsc_obs.append(torch.tensor(ep['obs'][frame][3]))
-            all_board_obs.append(torch.tensor(ep['obs'][frame][4]))
+            all_mu_obs.append(torch.tensor(ep['obs'][frame][0]))
+            all_tu_obs.append(torch.tensor(ep['obs'][frame][1]))
+            all_ms_obs.append(torch.tensor(ep['obs'][frame][2]))
+            all_msc_obs.append(torch.tensor(ep['obs'][frame][3]))
+            all_ts_obs.append(torch.tensor(ep['obs'][frame][4]))
+            all_tsc_obs.append(torch.tensor(ep['obs'][frame][5]))
+            all_board_obs.append(torch.tensor(ep['obs'][frame][6]))
             all_building_actions.append(torch.tensor(ep['actions'][frame][0]))
             all_unit_actions.append(torch.tensor(ep['actions'][frame][1]))
             all_building_log_probs.append(torch.tensor(ep['log_probs'][frame][0]))
@@ -130,6 +134,8 @@ for episode in range(max_episodes):
         all_advantages += advantages
 
     # Convert to tensors
+    all_mu_obs = torch.stack(all_mu_obs)
+    all_tu_obs = torch.stack(all_tu_obs)
     all_ms_obs = torch.stack(all_ms_obs)
     all_msc_obs = torch.stack(all_msc_obs)
     all_ts_obs = torch.stack(all_ts_obs)
@@ -157,6 +163,8 @@ for episode in range(max_episodes):
             end = start + mini_batch_size
             mb_idx = indices[start:end]
             real_batch_size = len(mb_idx)
+            mu_obs_batch = all_mu_obs[mb_idx]
+            tu_obs_batch = all_tu_obs[mb_idx]
             ms_obs_batch = all_ms_obs[mb_idx]
             msc_obs_batch = all_msc_obs[mb_idx]
             ts_obs_batch = all_ts_obs[mb_idx]
@@ -170,7 +178,7 @@ for episode in range(max_episodes):
             adv_batch = all_advantages[mb_idx]
 
             # Forward pass through model and calculate difference to old policy
-            building_actions_dists, unit_actions_dists, values = model.forward(ms_obs_batch, msc_obs_batch, ts_obs_batch, tsc_obs_batch, board_obs_batch)
+            building_actions_dists, unit_actions_dists, values = model.forward(mu_obs_batch, tu_obs_batch, ms_obs_batch, msc_obs_batch, ts_obs_batch, tsc_obs_batch, board_obs_batch)
             building_dist = Categorical(building_actions_dists)
             new_building_log_probs = building_dist.log_prob(building_action_batch)
             building_entropy = building_dist.entropy().mean()
@@ -188,7 +196,9 @@ for episode in range(max_episodes):
             unit_policy_loss = -torch.min(surr3, surr4).mean()
             value_loss = (return_batch - values.squeeze()).pow(2).mean()
 
-            factor = -min(0, mean_return) / 1000
+            print(mean_return)
+            factor = -min(0, mean_return + 1) / 1000
+            
             
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
             unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))

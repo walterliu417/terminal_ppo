@@ -8,9 +8,9 @@ class TerminalA2C(nn.Module):
         # CNN/Transformer feature extractor for map
         self.encoder = nn.Sequential(
             nn.Conv2d(12, embed_dim // 2, kernel_size=3, padding=1),  # [B, 32, 28, 28]
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Conv2d(embed_dim // 2, embed_dim, kernel_size=3, padding=1),       # [B, embed_dim, 28, 28]
-            nn.ReLU(),
+            nn.LeakyReLU(),
         )
 
         # Positional embeddings (learned 2D)
@@ -20,34 +20,42 @@ class TerminalA2C(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=4, dropout=0, batch_first=True)
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=transformer_depth)
 
+        self.unit_obs = nn.Sequential(
+            nn.Linear(56, embed_dim),
+            nn.LeakyReLU(),
+            nn.Flatten(start_dim=-2),
+            nn.Linear(embed_dim * 3, 20),
+            nn.LeakyReLU()
+        )
+
 
         self.buildings = nn.Sequential(
-            nn.Linear(embed_dim + 12, embed_dim * 2),
+            nn.Linear(embed_dim + 32, embed_dim * 3),
             nn.LeakyReLU(),
-            nn.Linear(embed_dim * 2, embed_dim),
+            nn.Linear(embed_dim * 3, embed_dim),
             nn.LeakyReLU(),
             nn.Linear(embed_dim, 9),
             nn.Softmax(dim=-1)
         )
 
         self.units = nn.Sequential(
-            nn.Linear(embed_dim + 12, embed_dim + 12),
+            nn.Linear(embed_dim + 32, embed_dim + 32),
             nn.LeakyReLU(),
-            nn.Linear(embed_dim + 12, embed_dim + 12),
+            nn.Linear(embed_dim + 32, embed_dim + 32),
             nn.LeakyReLU(),
-            nn.Linear(embed_dim + 12, 28 * 3 * 15),
+            nn.Linear(embed_dim + 32, 28 * 3 * 15),
             nn.Softmax(dim=-1)
         )
 
         self.value = nn.Sequential(
-            nn.Linear(embed_dim + 12, embed_dim // 2),
+            nn.Linear(embed_dim + 32, embed_dim // 2),
             nn.LeakyReLU(),
             nn.Linear(embed_dim // 2, embed_dim // 2),
             nn.LeakyReLU(),
             nn.Linear(embed_dim // 2, 1)
         )
 
-    def forward(self, ms, msc, ts, tsc, board):
+    def forward(self, mu, tu, ms, msc, ts, tsc, board):
         
         if len(board.shape) > 3:
             batch_size = board.size(0)
@@ -63,9 +71,14 @@ class TerminalA2C(nn.Module):
 
         pooled_board_features = board_features.mean(dim=-2) # Mean pooling
 
-        all_stats = torch.cat((ms, msc, ts, tsc), dim=-1)
+        all_units = torch.cat((mu, tu), dim=-1)
+        all_units = self.unit_obs.forward(all_units)
+
+        all_stats = torch.cat((all_units, ms, msc, ts, tsc), dim=-1)
 
         global_fused = torch.cat([pooled_board_features, all_stats], dim=-1)
+        with open("fun.txt", "w") as file:
+            file.write(str(mu.shape) + "       " + str(all_stats.shape))
 
         local_fused = []
         if len(board_features.shape) == 3:

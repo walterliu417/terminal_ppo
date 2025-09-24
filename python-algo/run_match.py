@@ -12,7 +12,7 @@ def run_single_game(process_command):
         process_command,
         shell=True,
         stdout=subprocess.DEVNULL,
-        stderr=sys.stdout
+        stderr=subprocess.STDOUT
         )
     # daemon necessary so game shuts down if this script is shut down by user
     p.daemon = 1
