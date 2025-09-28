@@ -12,16 +12,17 @@ from run_match import run_match
 
 
 # Hyperparameters
-gamma = 0.99  # Discount factor
-lambda_gae = 0.95  # GAE lambda
-eps_clip = 0.2  # PPO clipping parameter
-lr = 3e-4  # Learning rate
-ppo_epochs = 10  # Number of updates per episode
+gamma = 0.97  # Discount factor
+lambda_gae = 0.93  # GAE lambda
+eps_clip = 0.3  # PPO clipping parameter
+lr = 4e-4  # Learning rate
+ppo_epochs = 7  # Number of updates per episode
 mini_batch_size = 64  # Size of mini-batch for updating
-max_episodes = 1000  # Total number of episodes
-num_games = 1
+max_episodes = 10000  # Total number of episodes
+num_games = 20
+entropy_bonus = 0.02
 
-new_model = False
+new_model = True
 
 
 # Model and optimizer
@@ -196,14 +197,15 @@ for episode in range(max_episodes):
             unit_policy_loss = -torch.min(surr3, surr4).mean()
             value_loss = (return_batch - values.squeeze()).pow(2).mean()
 
-            factor = -min(0, mean_return + 1.25) / 2500
-            
+            #factor = -min(0, mean_return + 1.25) / 2500
+            factor = 0 # Don't force it
+
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
             unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))
             print(building_policy_loss, unit_policy_loss, value_loss, building_l1_reg, unit_l1_reg, factor)
 
             entropy = 0.5 * (building_entropy + unit_entropy)
-            loss = torch.abs(building_policy_loss) + torch.abs(unit_policy_loss) + 0.4 * value_loss - 0.01 * entropy + factor * (building_l1_reg + unit_l1_reg)
+            loss = torch.abs(building_policy_loss) + torch.abs(unit_policy_loss) + 0.4 * value_loss - entropy_bonus * entropy + factor * (building_l1_reg + unit_l1_reg)
             thelosses.append(loss.detach().item())
             optimizer.zero_grad()
             loss.backward()

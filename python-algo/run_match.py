@@ -2,6 +2,8 @@ import os
 import glob
 import subprocess
 import sys
+import json
+import random
 
 from gamelib.util import *
 
@@ -49,6 +51,19 @@ def run_match(algo1_path, algo2_path):
     
     #print("Algo 1: ", algo1)
     #print("Algo 2:", algo2)
+
+    # To help learning, increase resources by random amounts.
+    with open("game-configs.json", "r") as file:
+        data = json.load(file)
+    # Gigantic excess...
+    sc, sb, cr, br = random.randint(20, 300), random.randint(3, 40), random.randint(3, 40), random.randint(3, 40)
+    data["resources"]["startingCores"] = sc
+    data["startingBits"] = sb
+    data["coresPerRound"] = cr
+    data["bitsPerRound"] = br
+    print(f"Today's game settings: sc {sc}, sb {sb}, cr {cr}, br {br}")
+    with open("game-configs.json", "w") as file:
+        json.dump(data, file)
     
     run_single_game("cd {} && java -jar engine.jar work {} {}".format(parent_dir, algo1, algo2))
 

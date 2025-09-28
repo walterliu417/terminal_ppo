@@ -202,9 +202,12 @@ class AlgoStrategy(gamelib.AlgoCore):
             with open(f"buffer/{self.gamenum}_rewards.txt", "a") as file:
                 file.write(str(episode_rewards) + "\n")
 
-            building_bias_factor = self.building_resource_penalty / 250
-            unit_bias_factor = self.unit_resource_penalty / 250
+            # Some bias?
+            building_bias_factor = self.building_resource_penalty / 500
+            unit_bias_factor = self.unit_resource_penalty / 500
             
+            # No bias.
+            #building_bias_factor, unit_bias_factor = 0, 0
                 
             self.building_resource_penalty = 0
             self.unit_resource_penalty = 0
