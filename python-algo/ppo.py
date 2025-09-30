@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from nn_creator import TerminalA2C
+from nn_creator import *
 import numpy as np
 from torch.distributions import Categorical
 import time
@@ -26,14 +26,19 @@ new_model = True
 
 
 # Model and optimizer
-model = TerminalA2C()
+unit_model = UnitAgent()
+building_model = BuildingAgent()
 if not new_model:
     try:
-        model.load_state_dict(torch.load("checkpoints/latest.pth", weights_only=True))
+        unit_model.load_state_dict(torch.load("checkpoints/unit_latest.pth", weights_only=True))
+        building_model.load_state_dict(torch.load("checkpoints/building_latest.pth", weights_only=True))
     except Exception as e:
         print(e)
         print("Using new models.")
-optimizer = optim.Adam(model.parameters(), lr=lr)
+unit_optimizer = optim.Adam(unit_model.parameters(), lr=lr)
+building_optimizer = optim.Adam(building_model.parameters(), lr=lr)
+unit_model.train()
+building_model.train()
 
 
 # Helper to compute GAE across full buffer
@@ -58,166 +63,207 @@ for episode in range(max_episodes):
         start = time.time()
         with open("thegame.txt", "w") as file:
             file.write(str(game))
-        run_match("python-algo/ppo_strategy.sh", "python-algo/starter_strategy.sh")
+        is_windows = sys.platform.startswith('win')
+        if is_windows:
+            run_match("python-algo/ppo_strategy.ps1", "python-algo/starter_strategy.ps1")
+        else:
+            run_match("python-algo/ppo_strategy.sh", "python-algo/starter_strategy.sh")
 
-        ep_obs = []
-        ep_actions = []
-        ep_log_probs = []
-        ep_rewards = []
-        ep_dones = []
-        ep_values = []
+        unit_ep_obs = []
+        unit_ep_actions = []
+        unit_ep_log_probs = []
+        unit_ep_rewards = []
+        unit_ep_dones = []
+        unit_ep_values = []
+        building_ep_obs = []
+        building_ep_actions = []
+        building_ep_log_probs = []
+        building_ep_rewards = []
+        building_ep_dones = []
+        building_ep_values = []
 
         with open(f"buffer/{game}.py", "r") as file:
             data = [eval(_.strip()) for _ in file.readlines()]
 
         for obs, action, log_prob, value in data:
-            ep_obs.append(obs)
-            ep_actions.append(action)
-            ep_log_probs.append(log_prob)
-            ep_values.append(value)
+            unit_ep_obs.append([obs[0], obs[1], obs[3]])
+            unit_ep_actions.append(action[1])
+            unit_ep_log_probs.append(log_prob[1])
+            unit_ep_values.append(value[1])
+            building_ep_obs.append([obs[0], obs[2], obs[3]])
+            building_ep_actions.append(action[0])
+            building_ep_log_probs.append(log_prob[0])
+            building_ep_values.append(value[0])
         
         with open(f"buffer/{game}_rewards.txt", "r") as file:
-            data = [float(_.strip()) for _ in file.readlines()]
+            data = [_.strip().split(",") for _ in file.readlines()]
         
-        for reward in data:
+        for building_reward, unit_reward in data:
             # Normalise reward with victory reward
-            ep_rewards.append(reward / VICTORY_REWARD)
-            if (reward == -250.0) or (reward == 250.0):
-                ep_dones.append(True)
+            unit_ep_rewards.append(float(unit_reward) / VICTORY_REWARD)
+            building_ep_rewards.append(float(building_reward) / VICTORY_REWARD)
+            if (unit_reward == -250.0) or (unit_reward == 250.0):
+                unit_ep_dones.append(True)
+                building_ep_dones.append(True)
             else:
-                ep_dones.append(False)
+                unit_ep_dones.append(False)
+                building_ep_dones.append(False)
 
         # Store one full episode in the buffer
         buffer.append({
-            'obs': ep_obs,
-            'actions': ep_actions,
-            'log_probs': ep_log_probs,
-            'rewards': ep_rewards,
-            'dones': ep_dones,
-            'values': ep_values
+            'unit_obs': unit_ep_obs,
+            'unit_actions': unit_ep_actions,
+            'unit_log_probs': unit_ep_log_probs,
+            'unit_rewards': unit_ep_rewards,
+            'unit_dones': unit_ep_dones,
+            'unit_values': unit_ep_values,
+            'building_obs': building_ep_obs,
+            'building_actions': building_ep_actions,
+            'building_log_probs': building_ep_log_probs,
+            'building_rewards': building_ep_rewards,
+            'building_dones': building_ep_dones,
+            'building_values': building_ep_values
         })
 
-        print(f"Episode {episode}, Game {game} finished in time {time.time() - start} seconds. Reward: {sum(ep_rewards)}")
+        print(f"Episode {episode}, Game {game} finished in time {time.time() - start} seconds. Building reward {sum(building_ep_rewards)}, Unit rewrd {sum(unit_ep_rewards)})")
     
     # Time to update PPO
 
     # Flatten the buffer
-    all_mu_obs = []
-    all_tu_obs = []
-    all_ms_obs = []
-    all_msc_obs = []
-    all_ts_obs = []
-    all_tsc_obs = []
-    all_board_obs = []
+    all_unit_obs = []
+    all_all_building_obs = []
+    all_my_building_obs = []
+    all_stats_obs = []
     all_building_actions = []
     all_unit_actions = []
     all_building_log_probs = []
     all_unit_log_probs = []
-    all_returns = []
-    all_advantages = []
+    all_unit_returns = []
+    all_unit_advantages = []
+    all_building_returns = []
+    all_building_advantages = []
 
     for ep in buffer:
-        # TODO: need extra loop and sum for each game!
-        returns, advantages = compute_gae(ep['rewards'], ep['values'], ep['dones'])
-        for frame in range(len(ep["obs"])):
-            all_mu_obs.append(torch.tensor(ep['obs'][frame][0]))
-            all_tu_obs.append(torch.tensor(ep['obs'][frame][1]))
-            all_ms_obs.append(torch.tensor(ep['obs'][frame][2]))
-            all_msc_obs.append(torch.tensor(ep['obs'][frame][3]))
-            all_ts_obs.append(torch.tensor(ep['obs'][frame][4]))
-            all_tsc_obs.append(torch.tensor(ep['obs'][frame][5]))
-            all_board_obs.append(torch.tensor(ep['obs'][frame][6]))
-            all_building_actions.append(torch.tensor(ep['actions'][frame][0]))
-            all_unit_actions.append(torch.tensor(ep['actions'][frame][1]))
-            all_building_log_probs.append(torch.tensor(ep['log_probs'][frame][0]))
-            all_unit_log_probs.append(torch.tensor(ep['log_probs'][frame][1]))
-        all_returns += returns
-        all_advantages += advantages
+        unit_returns, unit_advantages = compute_gae(ep['unit_rewards'], ep['unit_values'], ep['unit_dones'])
+        building_returns, building_advantages = compute_gae(ep['building_rewards'], ep['building_values'], ep['building_dones'])
+        for frame in range(len(ep["unit_obs"])):
+            all_unit_obs.append(torch.tensor(ep['unit_obs'][frame][0]))
+            all_all_building_obs.append(torch.tensor(ep['unit_obs'][frame][1]))
+            all_my_building_obs.append(torch.tensor(ep['building_obs'][frame][1]))
+            all_stats_obs.append(torch.tensor(ep['building_obs'][frame][2]))
+            all_building_actions.append(torch.tensor(ep['building_actions'][frame]))
+            all_unit_actions.append(torch.tensor(ep['unit_actions'][frame]))
+            all_building_log_probs.append(torch.tensor(ep['building_log_probs'][frame]))
+            all_unit_log_probs.append(torch.tensor(ep['unit_log_probs'][frame]))
+        all_unit_returns += unit_returns
+        all_unit_advantages += unit_advantages
+        all_building_returns += building_returns
+        all_building_advantages += building_advantages
 
     # Convert to tensors
-    all_mu_obs = torch.stack(all_mu_obs)
-    all_tu_obs = torch.stack(all_tu_obs)
-    all_ms_obs = torch.stack(all_ms_obs)
-    all_msc_obs = torch.stack(all_msc_obs)
-    all_ts_obs = torch.stack(all_ts_obs)
-    all_tsc_obs = torch.stack(all_tsc_obs)
-    all_board_obs = torch.stack(all_board_obs)
+    all_unit_obs = torch.cat(all_unit_obs, dim=0)
+    all_all_building_obs = torch.cat(all_all_building_obs, dim=0)
+    all_my_building_obs = torch.cat(all_my_building_obs, dim=0)
+    all_stats_obs = torch.cat(all_stats_obs, dim=0)
     all_building_actions = torch.stack(all_building_actions)
     all_unit_actions = torch.stack(all_unit_actions)
-    all_building_log_probs = torch.stack(all_building_log_probs).detach()
-    all_unit_log_probs = torch.stack(all_unit_log_probs).detach()
-    all_returns = torch.tensor(all_returns, dtype=torch.float32)
-    all_advantages = torch.tensor(all_advantages, dtype=torch.float32)
-    all_advantages = (all_advantages - all_advantages.mean()) / (all_advantages.std() + 1e-8)
+    all_building_log_probs = torch.cat(all_building_log_probs, dim=0).detach()
+    all_unit_log_probs = torch.cat(all_unit_log_probs, dim=0).detach()
+    all_unit_returns = torch.tensor(all_unit_returns, dtype=torch.float32)
+    all_unit_advantages = torch.tensor(all_unit_advantages, dtype=torch.float32)
+    all_building_returns = torch.tensor(all_building_returns, dtype=torch.float32)
+    all_building_advantages = torch.tensor(all_building_advantages, dtype=torch.float32)
 
-    mean_return = all_returns.mean()
+    # Further advantage normalisation
+    all_unit_advantages = (all_unit_advantages - all_unit_advantages.mean()) / (all_unit_advantages.std() + 1e-8)
+    all_building_advantages = (all_building_advantages - all_building_advantages.mean()) / (all_building_advantages.std() + 1e-8)
+
 
     # PPO update
-    dataset_size = len(all_returns)
+    dataset_size = len(all_unit_returns)
     for _ in range(ppo_epochs):
         time_start = time.time()
         indices = np.arange(dataset_size)
         np.random.shuffle(indices)
-        thelosses = []
+        unit_thelosses = []
+        building_thelosses = []
         for start in range(0, dataset_size, mini_batch_size):
             # Get minibatch data
             end = start + mini_batch_size
             mb_idx = indices[start:end]
             real_batch_size = len(mb_idx)
-            mu_obs_batch = all_mu_obs[mb_idx]
-            tu_obs_batch = all_tu_obs[mb_idx]
-            ms_obs_batch = all_ms_obs[mb_idx]
-            msc_obs_batch = all_msc_obs[mb_idx]
-            ts_obs_batch = all_ts_obs[mb_idx]
-            tsc_obs_batch = all_tsc_obs[mb_idx]
-            board_obs_batch = all_board_obs[mb_idx]
+            unit_obs_batch = all_unit_obs[mb_idx]
+            all_building_obs_batch = all_all_building_obs[mb_idx]
+            my_building_obs_batch = all_my_building_obs[mb_idx]
+            stats_obs_batch = all_stats_obs[mb_idx]
             building_action_batch = all_building_actions[mb_idx]
             unit_action_batch = all_unit_actions[mb_idx]
-            old_building_log_prob_batch = all_building_log_probs[mb_idx].view((real_batch_size, 3, 392))
+            old_building_log_prob_batch = all_building_log_probs[mb_idx].view((real_batch_size, 210, 6))
             old_unit_log_prob_batch = all_unit_log_probs[mb_idx].view((real_batch_size, 28, 3))
-            return_batch = all_returns[mb_idx]
-            adv_batch = all_advantages[mb_idx]
+            unit_return_batch = all_unit_returns[mb_idx]
+            unit_adv_batch = all_unit_advantages[mb_idx]
+            building_return_batch = all_building_returns[mb_idx]
+            building_adv_batch = all_building_advantages[mb_idx]
 
-            # Forward pass through model and calculate difference to old policy
-            building_actions_dists, unit_actions_dists, values = model.forward(mu_obs_batch, tu_obs_batch, ms_obs_batch, msc_obs_batch, ts_obs_batch, tsc_obs_batch, board_obs_batch)
-            building_dist = Categorical(building_actions_dists)
-            new_building_log_probs = building_dist.log_prob(building_action_batch)
-            building_entropy = building_dist.entropy().mean()
-            building_ratio = torch.exp(new_building_log_probs - old_building_log_prob_batch).mean(dim=(1,2)) # Average ratio (change between old and new policy)
+            # Forward pass through models and calculate difference to old policy
+
+            # Unit model.
+            unit_actions_dists, unit_values = unit_model.forward(unit_obs_batch, all_building_obs_batch, stats_obs_batch)
             unit_dist = Categorical(unit_actions_dists)
             new_unit_log_probs = unit_dist.log_prob(unit_action_batch)
             unit_entropy = unit_dist.entropy().mean()
             unit_ratio = torch.exp(new_unit_log_probs - old_unit_log_prob_batch).mean(dim=(1,2)) # Average ratio
 
-            surr1 = building_ratio * adv_batch
-            surr2 = torch.clamp(building_ratio, 1 - eps_clip, 1 + eps_clip) * adv_batch
-            surr3 = unit_ratio * adv_batch
-            surr4 = torch.clamp(unit_ratio, 1 - eps_clip, 1 + eps_clip) * adv_batch
-            building_policy_loss = -torch.min(surr1, surr2).mean()
-            unit_policy_loss = -torch.min(surr3, surr4).mean()
-            value_loss = (return_batch - values.squeeze()).pow(2).mean()
+            surr1 = unit_ratio * unit_adv_batch
+            surr2 = torch.clamp(unit_ratio, 1 - eps_clip, 1 + eps_clip) * unit_adv_batch
+            unit_policy_loss = -torch.min(surr1, surr2).mean()
+            unit_value_loss = (unit_return_batch - unit_values.squeeze()).pow(2).mean()
 
             #factor = -min(0, mean_return + 1.25) / 2500
-            factor = 0 # Don't force it
+            unit_factor = 0 # Don't force it
+
+            unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))
+            print(unit_policy_loss, unit_value_loss, unit_l1_reg, unit_factor)
+
+            unit_loss = torch.abs(unit_policy_loss) + 0.4 * unit_value_loss - entropy_bonus * unit_entropy + unit_factor * unit_l1_reg
+            unit_thelosses.append(unit_loss.detach().item())
+            unit_optimizer.zero_grad()
+            unit_loss.backward()
+            unit_optimizer.step()
+
+            # Building model.
+            building_actions_dists, building_values = building_model.forward(unit_obs_batch, my_building_obs_batch, stats_obs_batch)
+            building_dist = Categorical(building_actions_dists)
+            new_building_log_probs = building_dist.log_prob(building_action_batch)
+            building_entropy = building_dist.entropy().mean()
+            building_ratio = torch.exp(new_building_log_probs - old_building_log_prob_batch).mean(dim=(1,2)) # Average ratio (change between old and new policy)
+
+            surr1 = building_ratio * building_adv_batch
+            surr2 = torch.clamp(building_ratio, 1 - eps_clip, 1 + eps_clip) * building_adv_batch
+            building_policy_loss = -torch.min(surr1, surr2).mean()
+            building_value_loss = (building_return_batch - building_values.squeeze()).pow(2).mean()
+
+            #factor = -min(0, mean_return + 1.25) / 2500
+            building_factor = 0 # Don't force it
 
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
-            unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))
-            print(building_policy_loss, unit_policy_loss, value_loss, building_l1_reg, unit_l1_reg, factor)
+            print(building_policy_loss, building_value_loss, building_l1_reg, building_factor)
 
-            entropy = 0.5 * (building_entropy + unit_entropy)
-            loss = torch.abs(building_policy_loss) + torch.abs(unit_policy_loss) + 0.4 * value_loss - entropy_bonus * entropy + factor * (building_l1_reg + unit_l1_reg)
-            thelosses.append(loss.detach().item())
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            building_loss = torch.abs(building_policy_loss) + 0.4 * building_value_loss - entropy_bonus * building_entropy + building_factor * building_l1_reg
+            building_thelosses.append(building_loss.detach().item())
+            building_optimizer.zero_grad()
+            building_loss.backward()
+            building_optimizer.step()
 
-        print(f"Mini-Epoch {_}, Loss = {np.mean(thelosses)}, Time {time.time() - time_start} seconds")
+        print(f"Mini-Epoch {_}, Building loss = {np.mean(building_thelosses)}, Unit loss = {np.mean(unit_thelosses)}, Time {time.time() - time_start} seconds")
 
     # Experience replay
     random.shuffle(buffer)
     length = len(buffer)
     buffer = buffer[ : length // 2]
 
-
-    torch.save(model.state_dict(), f"checkpoints/{episode}.pth")
-    torch.save(model.state_dict(), f"checkpoints/latest.pth")
+    # Save models.
+    torch.save(unit_model.state_dict(), f"checkpoints/unit_{episode}.pth")
+    torch.save(unit_model.state_dict(), f"checkpoints/unit_latest.pth")
+    torch.save(building_model.state_dict(), f"checkpoints/building_{episode}.pth")
+    torch.save(building_model.state_dict(), f"checkpoints/building_latest.pth")

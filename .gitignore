@@ -1,7 +1,7 @@
 *.DS_Store*
 *.replay
 *__pycache__*
-
+whiteboard.py
 algos/*
 !algos/starter-algo-ZIPME
 

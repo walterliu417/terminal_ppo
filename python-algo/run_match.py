@@ -8,9 +8,17 @@ import random
 from gamelib.util import *
 
 # Runs a single game
-def run_single_game(process_command):
+def run_single_game(process_command, log=False):
     print("Start run a match")
-    p = subprocess.Popen(
+    if log:
+        p = subprocess.Popen(
+        process_command,
+        shell=True,
+        stdout=sys.stdout,
+        stderr=sys.stderr
+        )
+    else:
+        p = subprocess.Popen(
         process_command,
         shell=True,
         stdout=subprocess.DEVNULL,
@@ -20,7 +28,7 @@ def run_single_game(process_command):
     p.daemon = 1
     p.wait()
 
-def run_match(algo1_path, algo2_path):
+def run_match(algo1_path, algo2_path, log=False):
     
     files = glob.glob('replays/*')
     for f in files:
@@ -56,16 +64,16 @@ def run_match(algo1_path, algo2_path):
     with open("game-configs.json", "r") as file:
         data = json.load(file)
     # Gigantic excess...
-    sc, sb, cr, br = random.randint(20, 300), random.randint(3, 40), random.randint(3, 40), random.randint(3, 40)
+    sc, sb, cr, br = random.randint(20, 200), random.randint(3, 40), random.randint(3, 20), random.randint(3, 20)
     data["resources"]["startingCores"] = sc
-    data["startingBits"] = sb
-    data["coresPerRound"] = cr
-    data["bitsPerRound"] = br
+    data["resources"]["startingBits"] = sb
+    data["resources"]["coresPerRound"] = cr
+    data["resources"]["bitsPerRound"] = br
     print(f"Today's game settings: sc {sc}, sb {sb}, cr {cr}, br {br}")
     with open("game-configs.json", "w") as file:
         json.dump(data, file)
     
-    run_single_game("cd {} && java -jar engine.jar work {} {}".format(parent_dir, algo1, algo2))
+    run_single_game("cd {} && java -jar engine.jar work {} {}".format(parent_dir, algo1, algo2), log=log)
 
     filename = glob.glob('replays/*')[0]
     with open(filename, "r") as file:
@@ -78,19 +86,19 @@ def run_match(algo1_path, algo2_path):
     p2index = endframe.find("p2Stats")
     trnc2 = endframe[p2index + 10:]
     p2indexend = trnc2.find(",")
-    p2endhealth = float(trnc1[:p2indexend-1])
+    p2endhealth = float(trnc2[:p2indexend-1])
 
     with open("thegame.txt", "r") as file:
         num = int(file.read().strip())
 
     if p1endhealth > p2endhealth:
         with open(f"buffer/{num}_rewards.txt", "a") as file:
-            file.write(f"{VICTORY_REWARD}\n")
+            file.write(f"{VICTORY_REWARD},{VICTORY_REWARD}\n")
     else:
         with open(f"buffer/{num}_rewards.txt", "a") as file:
-            file.write(f"-{VICTORY_REWARD}\n")
+            file.write(f"-{VICTORY_REWARD},-{VICTORY_REWARD}\n")
 
 
 
 if __name__ == "__main__":
-    run_match("python-algo/ppo_strategy.ps1", "python-algo/starter_strategy.ps1")
+    run_match("python-algo/ppo_strategy.ps1", "python-algo/starter_strategy.ps1", log=True)
