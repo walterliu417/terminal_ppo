@@ -34,6 +34,7 @@ trig_to_tensor = dict()
 for key, value in list(tensor_to_trig.items()):
     trig_to_tensor[value] = key
 
+
 def xy_to_diag_coord_full(x, y):
     along_up_coord = (y + x - 13)
     # across_line : y = -x + (x_p+y_p)

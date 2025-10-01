@@ -52,6 +52,10 @@ class AlgoStrategy(gamelib.AlgoCore):
             open(f"buffer/{self.gamenum}_rewards.txt", "w").close()
         except Exception as e:
             print(e)
+        try:
+            open(f"buffer/{self.gamenum}_penalties.txt", "w").close()
+        except Exception as e:
+            print(e)
 
         self.building_resource_penalty = 0
         self.unit_resource_penalty = 0
@@ -220,11 +224,11 @@ class AlgoStrategy(gamelib.AlgoCore):
             building_bias_factor, unit_bias_factor = 0, 0
         else:
             self.calc_rewards(data[-2], data[-1])
-            self.building_reward -= self.building_resource_penalty
-            self.unit_reward -= self.unit_resource_penalty
 
             with open(f"buffer/{self.gamenum}_rewards.txt", "a") as file:
                 file.write(f"{self.building_reward},{self.unit_reward}\n")
+            with open(f"buffer/{self.gamenum}_penalties.txt", "a") as file:
+                file.write(f"{self.building_resource_penalty},{self.unit_resource_penalty}\n")
             
             
             self.building_reward = 0
@@ -232,11 +236,11 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.scored_locations = np.zeros((2, 28))
 
             # Some bias?
-            building_bias_factor = self.building_resource_penalty / 500
-            unit_bias_factor = self.unit_resource_penalty / 500
+            # building_bias_factor = self.building_resource_penalty / 500
+            # unit_bias_factor = self.unit_resource_penalty / 500
             
             # No bias.
-            #building_bias_factor, unit_bias_factor = 0, 0
+            building_bias_factor, unit_bias_factor = 0, 0
                 
             self.building_resource_penalty = 0
             self.unit_resource_penalty = 0

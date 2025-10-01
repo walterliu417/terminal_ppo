@@ -75,12 +75,14 @@ for episode in range(max_episodes):
         unit_ep_rewards = []
         unit_ep_dones = []
         unit_ep_values = []
+        unit_ep_penalties = []
         building_ep_obs = []
         building_ep_actions = []
         building_ep_log_probs = []
         building_ep_rewards = []
         building_ep_dones = []
         building_ep_values = []
+        building_ep_penalties = []
 
         with open(f"buffer/{game}.py", "r") as file:
             data = [eval(_.strip()) for _ in file.readlines()]
@@ -109,6 +111,14 @@ for episode in range(max_episodes):
                 unit_ep_dones.append(False)
                 building_ep_dones.append(False)
 
+        with open(f"buffer/{game}_penalties.txt", "r") as file:
+            data = [_.strip().split(",") for _ in file.readlines()]
+        
+        for building_penalty, unit_penalty in data:
+            # Normalise reward with victory reward
+            unit_ep_penalties.append(float(unit_penalty) / VICTORY_REWARD)
+            building_ep_penalties.append(float(building_penalty) / VICTORY_REWARD)
+
         # Store one full episode in the buffer
         buffer.append({
             'unit_obs': unit_ep_obs,
@@ -117,12 +127,14 @@ for episode in range(max_episodes):
             'unit_rewards': unit_ep_rewards,
             'unit_dones': unit_ep_dones,
             'unit_values': unit_ep_values,
+            'unit_penalties' : unit_ep_penalties,
             'building_obs': building_ep_obs,
             'building_actions': building_ep_actions,
             'building_log_probs': building_ep_log_probs,
             'building_rewards': building_ep_rewards,
             'building_dones': building_ep_dones,
-            'building_values': building_ep_values
+            'building_values': building_ep_values,
+            'building_penalties': building_ep_penalties
         })
 
         print(f"Episode {episode}, Game {game} finished in time {time.time() - start} seconds. Building reward {sum(building_ep_rewards)}, Unit rewrd {sum(unit_ep_rewards)})")
@@ -140,8 +152,10 @@ for episode in range(max_episodes):
     all_unit_log_probs = []
     all_unit_returns = []
     all_unit_advantages = []
+    all_unit_penalties = []
     all_building_returns = []
     all_building_advantages = []
+    all_building_penalties = []
 
     for ep in buffer:
         unit_returns, unit_advantages = compute_gae(ep['unit_rewards'], ep['unit_values'], ep['unit_dones'])
@@ -155,6 +169,8 @@ for episode in range(max_episodes):
             all_unit_actions.append(torch.tensor(ep['unit_actions'][frame]))
             all_building_log_probs.append(torch.tensor(ep['building_log_probs'][frame]))
             all_unit_log_probs.append(torch.tensor(ep['unit_log_probs'][frame]))
+            all_unit_penalties += ep['unit_penalties'][frame]
+            all_building_penalties += ep['building_penalties'][frame]
         all_unit_returns += unit_returns
         all_unit_advantages += unit_advantages
         all_building_returns += building_returns
@@ -171,6 +187,8 @@ for episode in range(max_episodes):
     all_unit_log_probs = torch.cat(all_unit_log_probs, dim=0).detach()
     all_unit_returns = torch.tensor(all_unit_returns, dtype=torch.float32)
     all_unit_advantages = torch.tensor(all_unit_advantages, dtype=torch.float32)
+    all_unit_penalties = torch.stack(all_unit_penalties)
+    all_building_penalties = torch.stack(all_building_penalties)
     all_building_returns = torch.tensor(all_building_returns, dtype=torch.float32)
     all_building_advantages = torch.tensor(all_building_advantages, dtype=torch.float32)
 
@@ -192,6 +210,9 @@ for episode in range(max_episodes):
             end = start + mini_batch_size
             mb_idx = indices[start:end]
             real_batch_size = len(mb_idx)
+            if real_batch_size <= mini_batch_size:
+                # rather not train.
+                continue
             unit_obs_batch = all_unit_obs[mb_idx]
             all_building_obs_batch = all_all_building_obs[mb_idx]
             my_building_obs_batch = all_my_building_obs[mb_idx]
@@ -202,8 +223,10 @@ for episode in range(max_episodes):
             old_unit_log_prob_batch = all_unit_log_probs[mb_idx].view((real_batch_size, 28, 3))
             unit_return_batch = all_unit_returns[mb_idx]
             unit_adv_batch = all_unit_advantages[mb_idx]
+            unit_penalty_batch = all_unit_penalties[mb_idx]
             building_return_batch = all_building_returns[mb_idx]
             building_adv_batch = all_building_advantages[mb_idx]
+            building_penalty_batch = all_building_penalties[mb_idx]
 
             # Forward pass through models and calculate difference to old policy
 
@@ -219,8 +242,8 @@ for episode in range(max_episodes):
             unit_policy_loss = -torch.min(surr1, surr2).mean()
             unit_value_loss = (unit_return_batch - unit_values.squeeze()).pow(2).mean()
 
-            #factor = -min(0, mean_return + 1.25) / 2500
-            unit_factor = 0 # Don't force it
+            unit_factor = max(0, torch.mean(unit_penalty_batch)) / (real_batch_size * 100)
+            #unit_factor = 0 # Don't force it
 
             unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))
             print(unit_policy_loss, unit_value_loss, unit_l1_reg, unit_factor)
@@ -243,7 +266,7 @@ for episode in range(max_episodes):
             building_policy_loss = -torch.min(surr1, surr2).mean()
             building_value_loss = (building_return_batch - building_values.squeeze()).pow(2).mean()
 
-            #factor = -min(0, mean_return + 1.25) / 2500
+            building_factor = max(0, torch.mean(building_penalty_batch)) / (real_batch_size * 100)
             building_factor = 0 # Don't force it
 
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
@@ -260,7 +283,7 @@ for episode in range(max_episodes):
     # Experience replay
     random.shuffle(buffer)
     length = len(buffer)
-    buffer = buffer[ : length // 2]
+    buffer = buffer[ : length // 50]
 
     # Save models.
     torch.save(unit_model.state_dict(), f"checkpoints/unit_{episode}.pth")
