@@ -169,8 +169,8 @@ for episode in range(max_episodes):
             all_unit_actions.append(torch.tensor(ep['unit_actions'][frame]))
             all_building_log_probs.append(torch.tensor(ep['building_log_probs'][frame]))
             all_unit_log_probs.append(torch.tensor(ep['unit_log_probs'][frame]))
-            all_unit_penalties += ep['unit_penalties'][frame]
-            all_building_penalties += ep['building_penalties'][frame]
+            all_unit_penalties.append(ep['unit_penalties'][frame])
+            all_building_penalties.append(ep['building_penalties'][frame])
         all_unit_returns += unit_returns
         all_unit_advantages += unit_advantages
         all_building_returns += building_returns

@@ -11,8 +11,6 @@ from nn_creator import *
 import gamelib
 from gamelib.util import *
 
-
-
 """
 Most of the algo code you write will be in this file unless you create new
 modules yourself. Start by modifying the 'on_turn' function.
@@ -227,8 +225,6 @@ class AlgoStrategy(gamelib.AlgoCore):
 
             with open(f"buffer/{self.gamenum}_rewards.txt", "a") as file:
                 file.write(f"{self.building_reward},{self.unit_reward}\n")
-            with open(f"buffer/{self.gamenum}_penalties.txt", "a") as file:
-                file.write(f"{self.building_resource_penalty},{self.unit_resource_penalty}\n")
             
             
             self.building_reward = 0
@@ -242,8 +238,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             # No bias.
             building_bias_factor, unit_bias_factor = 0, 0
                 
-            self.building_resource_penalty = 0
-            self.unit_resource_penalty = 0
 
         if len(data) <= 1:
             state = eval(data[0])
@@ -397,7 +391,13 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         self.building_resource_penalty = max(0, attempt_struct_pts - current_struct_pts) / 20
         self.unit_resource_penalty = max(0, attempt_mobile_pts - current_mobile_pts) / 20
+        
+        with open(f"buffer/{self.gamenum}_penalties.txt", "a") as file:
+            file.write(f"{self.building_resource_penalty},{self.unit_resource_penalty}\n")
                 
+        self.building_resource_penalty = 0
+        self.unit_resource_penalty = 0
+
         # Save data for training.
         episode_building_log_probs = building_dist.log_prob(building_action).tolist()
         episode_unit_log_probs = unit_dist.log_prob(unit_action).tolist()
