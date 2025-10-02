@@ -187,8 +187,8 @@ for episode in range(max_episodes):
     all_unit_log_probs = torch.cat(all_unit_log_probs, dim=0).detach()
     all_unit_returns = torch.tensor(all_unit_returns, dtype=torch.float32)
     all_unit_advantages = torch.tensor(all_unit_advantages, dtype=torch.float32)
-    all_unit_penalties = torch.stack(all_unit_penalties)
-    all_building_penalties = torch.stack(all_building_penalties)
+    all_unit_penalties = torch.tensor(all_unit_penalties, dtype=torch.float32)
+    all_building_penalties = torch.tensor(all_building_penalties, dtype=torch.float32)
     all_building_returns = torch.tensor(all_building_returns, dtype=torch.float32)
     all_building_advantages = torch.tensor(all_building_advantages, dtype=torch.float32)
 
@@ -210,9 +210,10 @@ for episode in range(max_episodes):
             end = start + mini_batch_size
             mb_idx = indices[start:end]
             real_batch_size = len(mb_idx)
-            if real_batch_size <= mini_batch_size:
+            if real_batch_size <= 1:
                 # rather not train.
                 continue
+            print(f"Batch size: {real_batch_size}")
             unit_obs_batch = all_unit_obs[mb_idx]
             all_building_obs_batch = all_all_building_obs[mb_idx]
             my_building_obs_batch = all_my_building_obs[mb_idx]
@@ -242,11 +243,12 @@ for episode in range(max_episodes):
             unit_policy_loss = -torch.min(surr1, surr2).mean()
             unit_value_loss = (unit_return_batch - unit_values.squeeze()).pow(2).mean()
 
-            unit_factor = max(0, torch.mean(unit_penalty_batch)) / (real_batch_size * 100)
+            mean_unit_penalty = torch.mean(unit_penalty_batch)
+            unit_factor = max(0, mean_unit_penalty) / (real_batch_size * 100)
             #unit_factor = 0 # Don't force it
 
             unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))
-            print(unit_policy_loss, unit_value_loss, unit_l1_reg, unit_factor)
+            print(unit_policy_loss, unit_value_loss, unit_l1_reg, mean_unit_penalty, unit_factor)
 
             unit_loss = torch.abs(unit_policy_loss) + 0.4 * unit_value_loss - entropy_bonus * unit_entropy + unit_factor * unit_l1_reg
             unit_thelosses.append(unit_loss.detach().item())
@@ -266,11 +268,12 @@ for episode in range(max_episodes):
             building_policy_loss = -torch.min(surr1, surr2).mean()
             building_value_loss = (building_return_batch - building_values.squeeze()).pow(2).mean()
 
-            building_factor = max(0, torch.mean(building_penalty_batch)) / (real_batch_size * 100)
+            mean_building_penalty = torch.mean(building_penalty_batch)
+            building_factor = max(0, mean_building_penalty) / (real_batch_size * 100)
             building_factor = 0 # Don't force it
 
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
-            print(building_policy_loss, building_value_loss, building_l1_reg, building_factor)
+            print(building_policy_loss, building_value_loss, building_l1_reg, mean_building_penalty, building_factor)
 
             building_loss = torch.abs(building_policy_loss) + 0.4 * building_value_loss - entropy_bonus * building_entropy + building_factor * building_l1_reg
             building_thelosses.append(building_loss.detach().item())
