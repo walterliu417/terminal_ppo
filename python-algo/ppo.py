@@ -22,7 +22,7 @@ max_episodes = 10000  # Total number of episodes
 num_games = 20
 entropy_bonus = 0.02
 
-new_model = True
+new_model = False
 
 
 # Model and optimizer
@@ -244,7 +244,7 @@ for episode in range(max_episodes):
             unit_value_loss = (unit_return_batch - unit_values.squeeze()).pow(2).mean()
 
             mean_unit_penalty = torch.mean(unit_penalty_batch)
-            unit_factor = max(0, mean_unit_penalty) / (real_batch_size * 100)
+            unit_factor = max(0, mean_unit_penalty) / (real_batch_size * 25)
             #unit_factor = 0 # Don't force it
 
             unit_l1_reg = torch.sum(torch.abs(new_unit_log_probs))
@@ -269,8 +269,8 @@ for episode in range(max_episodes):
             building_value_loss = (building_return_batch - building_values.squeeze()).pow(2).mean()
 
             mean_building_penalty = torch.mean(building_penalty_batch)
-            building_factor = max(0, mean_building_penalty) / (real_batch_size * 100)
-            building_factor = 0 # Don't force it
+            building_factor = max(0, mean_building_penalty) / (real_batch_size * 50)
+            #building_factor = 0 # Don't force it
 
             building_l1_reg = torch.sum(torch.abs(new_building_log_probs))
             print(building_policy_loss, building_value_loss, building_l1_reg, mean_building_penalty, building_factor)
@@ -286,7 +286,7 @@ for episode in range(max_episodes):
     # Experience replay
     random.shuffle(buffer)
     length = len(buffer)
-    buffer = buffer[ : length // 50]
+    buffer = buffer[ : int(length * 0.8)]
 
     # Save models.
     torch.save(unit_model.state_dict(), f"checkpoints/unit_{episode}.pth")

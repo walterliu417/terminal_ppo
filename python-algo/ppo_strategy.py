@@ -467,7 +467,7 @@ class AlgoStrategy(gamelib.AlgoCore):
             
         damages = events["damage"]
         for dmg in damages:
-            multiplier = 1 if dmg[4] == 1 else -1
+            multiplier = -1 if dmg[4] == 1 else 1
             thing_type = dmg[2]
             dmg_val = dmg[1]
             if thing_type == 0:
