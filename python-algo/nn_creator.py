@@ -1,6 +1,13 @@
 import torch
 import torch.nn as nn
 
+class Tanh10(nn.Module):
+    def __init__(self):
+        super(Tanh10, self).__init__()
+
+    def forward(self, x):
+        return 10 * torch.tanh(x / 10)
+
 class UnitFeatureNet(nn.Module):
     def __init__(self):
         super(UnitFeatureNet, self).__init__()
@@ -71,6 +78,7 @@ class UnitAgent(nn.Module):
             nn.ConvTranspose1d(30, 30, 5, 1, 2),
             nn.LeakyReLU(),
             nn.ConvTranspose1d(30, 30, 5, 1, 2),
+            Tanh10(),
             nn.Softmax(dim=-2)
         )
         # End: (30, 28)
@@ -148,6 +156,7 @@ class BuildingAgent(nn.Module):
         self.building_action_net = nn.Sequential(
             nn.TransformerEncoder(encoder_layer, num_layers=3),
             nn.Linear(32, 12),
+            Tanh10(),
             nn.Softmax(dim=-1)
         )
         # End: (210, 12)

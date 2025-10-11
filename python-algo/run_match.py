@@ -63,8 +63,8 @@ def run_match(algo1_path, algo2_path, log=False):
     # To help learning, increase resources by random amounts.
     with open("game-configs.json", "r") as file:
         data = json.load(file)
-    # Some excess...
-    sc, sb, cr, br = random.randint(30, 100), random.randint(4, 25), random.randint(4, 15), random.randint(4, 15)
+    # Annealing
+    sc, sb, cr, br = random.randint(35, 70), random.randint(4, 15), random.randint(4, 10), random.randint(4, 10)
     data["resources"]["startingCores"] = sc
     data["resources"]["startingBits"] = sb
     data["resources"]["coresPerRound"] = cr

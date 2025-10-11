@@ -286,10 +286,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         unit_bias[:, :, :, 0] += unit_bias_factor
         unit_probs += unit_bias
 
-        building_dist = Categorical(probs=building_probs)
+        building_dist = Categorical(probs=building_probs, validate_args=False)
         building_action = building_dist.sample()[0] # (210, 6)
 
-        unit_dist = Categorical(probs=unit_probs)
+        unit_dist = Categorical(probs=unit_probs, validate_args=False)
         unit_action = unit_dist.sample()[0] # (28, 3)
 
         episode_actions = [building_action.tolist(), unit_action.tolist()]
